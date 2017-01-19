@@ -8,14 +8,20 @@ import com.rometools.rome.feed.synd.SyndEntry;
 import com.rometools.rome.feed.synd.SyndFeed;
 import com.rometools.rome.io.SyndFeedInput;
 import com.rometools.rome.io.XmlReader;
+import org.jdom2.Element;
 
 import java.net.URL;
+import java.util.List;
 
 public class WeltQcuSpeechlet implements Speechlet {
 
 
-    public static final String WELT_ACTION = "Frag mich nach Q C U";
+    public static final String WELT_ACTION = "Frag mich nach Nachrichten.";
     public static final String DIE_WELT = "Die Welt";
+
+    @Override
+    public void onSessionEnded(SessionEndedRequest request, Session session) throws SpeechletException {
+    }
 
     @Override
     public void onSessionStarted(SessionStartedRequest request, Session session) throws SpeechletException {
@@ -24,32 +30,25 @@ public class WeltQcuSpeechlet implements Speechlet {
 
     @Override
     public SpeechletResponse onLaunch(LaunchRequest request, Session session) throws SpeechletException {
-        return welcomeUser();
+        return getForText("Willkommen im Nachrichten Check von Welt N24. " + WELT_ACTION);
     }
 
     @Override
     public SpeechletResponse onIntent(IntentRequest request, Session session) throws SpeechletException {
-        return getQcu();
+        final String intentName = request.getIntent().getName();
+        if ("Rufen".equals(intentName)) {
+            return getForText("Check die Welt auf welt.de");
+        } else if ("AMAZON.StopIntent".equals(intentName)) {
+            return handleStopIntent();
+        } else if ("Nachrichten".equals(intentName)) {
+            return getQcu();
+        } else return getForText("Die Welt sagt Entschuldigung. Bitte wiederholen.");
     }
 
-    @Override
-    public void onSessionEnded(SessionEndedRequest request, Session session) throws SpeechletException {
-
-    }
-
-
-    private SpeechletResponse welcomeUser() {
-        String speechText = String.format("Hallo hier ist %s. %s", DIE_WELT, WELT_ACTION);
-        SimpleCard card = new SimpleCard();
-        card.setTitle(DIE_WELT);
-        card.setContent(speechText);
-
+    private SpeechletResponse handleStopIntent() {
         PlainTextOutputSpeech speech = new PlainTextOutputSpeech();
-        speech.setText(speechText);
-
-        Reprompt reprompt = new Reprompt();
-        reprompt.setOutputSpeech(speech);
-        return SpeechletResponse.newAskResponse(speech, reprompt, card);
+        speech.setText("Auf Wiedersehen und check die welt auf www.welt.de");
+        return SpeechletResponse.newTellResponse(speech);
     }
 
     private SpeechletResponse getQcu() {
@@ -60,9 +59,13 @@ public class WeltQcuSpeechlet implements Speechlet {
             SyndFeed feed = input.build(new XmlReader(feedUrl));
 
             for (SyndEntry item : feed.getEntries()) {
-
-                texte.append(item.getDescription().getValue());
-                texte.append(System.getProperty("line.separator"));
+                final List<Element> foreignMarkup = item.getForeignMarkup();
+                for (final Element element : foreignMarkup) {
+                    if ("qcu".equals(element.getName())) {
+                        texte.append(item.getDescription().getValue());
+                        texte.append(System.getProperty("line.separator"));
+                    }
+                }
             }
 
             SimpleCard card = new SimpleCard();
@@ -77,40 +80,18 @@ public class WeltQcuSpeechlet implements Speechlet {
             return SpeechletResponse.newAskResponse(speech, reprompt, card);
 
         } catch (Exception e) {
-            return error();
+            return getForText("Die Welt sagt sorry. Bitte wiederholen.");
         }
-
-
     }
 
-    private SpeechletResponse error() {
-        final String fehler = "Fehler";
+    private SpeechletResponse getForText(String text) {
         SimpleCard errorCard = new SimpleCard();
         errorCard.setTitle(DIE_WELT);
-        errorCard.setContent(fehler);
+        errorCard.setContent(text);
         PlainTextOutputSpeech errorSpeech = new PlainTextOutputSpeech();
-        errorSpeech.setText(fehler);
+        errorSpeech.setText(text);
         Reprompt reprompt = new Reprompt();
         reprompt.setOutputSpeech(errorSpeech);
         return SpeechletResponse.newAskResponse(errorSpeech, reprompt, errorCard);
-    }
-
-    private SpeechletResponse getHelp() {
-        String speechText = WELT_ACTION;
-
-        // Create the Simple card content.
-        SimpleCard card = new SimpleCard();
-        card.setTitle("Die Welt");
-        card.setContent(speechText);
-
-        // Create the plain text output.
-        PlainTextOutputSpeech speech = new PlainTextOutputSpeech();
-        speech.setText(speechText);
-
-        // Create reprompt
-        Reprompt reprompt = new Reprompt();
-        reprompt.setOutputSpeech(speech);
-
-        return SpeechletResponse.newAskResponse(speech, reprompt, card);
     }
 }
